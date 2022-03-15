@@ -1,0 +1,374 @@
+---
+title: "biostat527_hw2"
+author: "Qin Li"
+date: "4/22/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. 
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("q1.png")
+
+```
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("q1c.png")
+```
+
+
+# 2.  
+
+## a.
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("q2.png")
+
+```
+
+##b. 
+
+```{r}
+UpdateCoefficient <- function(x,y,lambda, beta, j){
+  
+  y_tilda <- y - x[,-j] %*% beta[-j]
+  z <- t(y_tilda) %*% x[,j]
+  scale <- t(x[,j])%*%x[,j]
+
+  if (z > lambda){
+    beta[j] <- (z-lambda)/scale
+  }
+  else if (z < -lambda){
+    beta[j] <- (z+lambda)/scale
+  }
+  else {
+    beta[j] = 0
+  }
+  
+  return(beta)
+}
+
+
+
+```
+
+
+## c & d.
+
+```{r}
+
+MyLasso <- function(x,y,lambda, maxiter = 200, thr = 1e-3){
+  ## Assume x is already standarized, since we are using rnorm to generate x
+  x = scale(x, scale = FALSE)
+  nlen <- ncol(x)
+  beta_hat <- c(rep(0,nlen)) # initialize beta as 0's 
+  beta.iter <- matrix(0,nrow = nlen, ncol = 1)
+  
+  for (i in 1:maxiter) {
+    beta_old <- beta_hat
+    # print(beta_old)
+    for (j in 1:nlen){
+      beta_hat <- UpdateCoefficient(x,y,lambda, beta_hat, j)
+      # beta.iter <- cbind(beta.iter, beta_hat)
+    }
+    beta.iter <- cbind(beta.iter, beta_hat)
+  
+    Thrhold <- sqrt(sum((beta_hat -beta_old)^2))/sqrt(sum(beta_old^2))
+    # print(Thrhold)
+    if (Thrhold <= thr){
+    break
+      }
+  }
+  beta.intercept <- mean(y)-sum(colMeans(x) %*% beta_hat)
+  
+  return(list('beta' = beta_hat, 'beta.intercept' = beta.intercept, 'iter'=beta.iter))
+}
+```
+
+## e. 
+
+```{r}
+set.seed(28)
+n <- 100; p <- 20
+X <- matrix(rnorm(n*p), ncol=p) 
+beta <- c(rep(3,5),rep(0,15))
+y <- X %*% beta + rnorm(n)
+
+#lambda = 0.1
+R1 <- MyLasso(X,y,0.1)
+#lambda = 0.5
+R2 <- MyLasso(X,y,0.5)
+#lambda = 1
+R3 <- MyLasso(X,y,1)
+#lambda = 5
+R4 <- MyLasso(X,y,5)
+#lambda = 10
+R5 <- MyLasso(X,y,10)
+
+results <- cbind(R1[[1]],R2[[1]],R3[[1]],R4[[1]],R5[[1]])
+colnames(results) <- c("lambda = 0.1", "lambda = 0.5", "lambda = 1", "lambda = 5", "lambda = 10")
+results
+
+```
+
+## f. 
+
+Based on the plot, it seems like a smaller value of lambda, it requires more iterations for the algorithm to converge. When lambda = 0.1, it takes 7 iterations to converge; when lambda = 100, it only takes 5 iterations to converge. Smaller value of lambda also shows a smaller value of objective as the algorithm converges. 
+
+```{r}
+library(ggplot2)
+ObjFunction <- function(x,y,beta,lambda){
+  objective <- 1/2*sum((y-x%*%beta)^2) + lambda*sum(abs(beta))
+  return(objective)
+}
+
+
+lamb <- c(0.1,0.5,1,5,10,100)
+lossdf <- NULL
+for (i in 1:length(lamb)){
+  Result <- MyLasso(X,y,lamb[i])
+  # beta <- Result$beta
+  matstore <- matrix(NA,nrow = ncol(Result$iter),ncol = 3)
+  matstore[,1] <- seq(ncol(Result$iter)) # the number of iteration
+  loss <- c()
+  for (j in 1:ncol(Result$iter)){
+    loss[j] <- ObjFunction(X,y,Result$iter[,j], lamb[i]) # the value of objective function
+  }
+  matstore[,2] <- loss
+  matstore[,3] <- rep(lamb[i],ncol(Result$iter))  # the value of lambda
+  lossdf <- rbind(lossdf,matstore)
+}
+
+lossdf <- as.data.frame(lossdf)
+colnames(lossdf) <- c("num_iter","Objective","lamb")
+lossdf$lamb <- factor(lossdf$lamb)
+ggplot(lossdf, aes(x = num_iter, y = Objective, col = lamb),main = 'Lasso Ojective function and iteration') + geom_line()
+
+
+```
+
+## g. 
+
+```{r}
+LScoef <- coef(lm(y~X))
+lasso <- MyLasso(X,y,0.0001)
+lassocoef <- append(lasso$beta.intercept, lasso$beta)
+dfcoef <- data.frame('LM'= LScoef, 'Lasso'=lassocoef)
+dfcoef
+```
+
+
+
+
+# 3. 
+
+## a. 
+
+With a larger value of lambda, we have a smaller value of l1 norm of beta is getting smaller. 
+
+```{r}
+library("ISLR")
+library(ggplot2)
+data(Hitters)
+Hitters <- na.omit(Hitters)
+X <- model.matrix(Salary ~ ., data = Hitters)[,-1]
+Y <- as.matrix(Hitters$Salary)
+lambda <- c(0.01, 0.05,0.1, 0.5, 1, 2, 5)
+lasso_mat <- matrix(0,ncol = 2,nrow = length(lambda))
+lasso_mat[,1] <- lambda
+for (i in 1:length(lambda)){
+  result <- MyLasso(X,Y,lambda[i])
+  result_store <- append(result$beta.intercept,result$beta)
+  lasso_mat[i,2] <- sum(abs(result_store))
+}
+
+lasso_df <- as.data.frame(lasso_mat)
+ggplot(lasso_df, aes(x = lambda, y = lasso_mat[,2])) + geom_line() +
+  xlab("lambda")+ ylab("abs(beta)")
+
+```
+
+
+## b.
+
+There are sparse solution, that some coefficient estimates are exactly zero.
+
+```{r}
+Lambda <- c(0.01,0.01,1,5,10,seq(100,1000,length.out =9),2000,3000,5000,10000)
+q3mat <- c()
+for (i in 1:length(Lambda)){
+  res <- MyLasso(X,Y,Lambda[i])
+  q3mat <- rbind(q3mat,res$beta)
+}
+
+plot(Lambda,q3mat[,1], type = "l",ylim = c(-100,100))
+for (i in 2:length(Lambda)){
+  lines(Lambda,q3mat[,i], type = "l", col = i)
+}
+
+legend("topright",lty = seq(1,length(Lambda)),col = seq(1,length(Lambda)), legend = as.character(Lambda))
+
+
+```
+
+# 4.
+
+## a.
+
+The coefficients from two methods are different. 
+
+```{r}
+library(glmnet)
+X <- model.matrix(Salary ~ ., data = Hitters)[,-1]
+Y <- as.matrix(Hitters$Salary)
+l <- c(0.01, 0.05,0.1, 0.5, 1, 2, 5)
+
+
+# betas for lasso in glmnet
+lasso.mod <- glmnet(X, Y, alpha = 1, lambda = l)
+lasso.coef <- round(coef(lasso.mod),3)
+colnames(lasso.coef) <- c(paste0('lambda = ',as.character(l)))
+MyLasso.coef <- matrix(0,nrow = ncol(X), ncol = 1)
+lasso.coef[-1,]
+
+# betas for MyLasso
+for (i in 1:length(l)){
+  res <- MyLasso(X,Y,l[i])
+  
+  MyLasso.coef <- cbind(MyLasso.coef,round(res$beta,3))
+}
+MyLasso.coef <- MyLasso.coef[,-1]
+colnames(MyLasso.coef) <- c(paste0('lambda = ',as.character(l)))
+MyLasso.coef
+
+
+```
+
+# 5.
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("q5.png")
+
+```
+
+# 6. 
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("q6.png")
+
+```
+
+
+# 7. 
+
+## a.
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("q7a.png")
+
+```
+
+## b-d.
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("q7b.png")
+
+```
+
+## g. 
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("q7g.png")
+
+```
+
+
+## e.
+
+```{r}
+# generate 100 data points
+## a. 
+set.seed(222222)
+x1 <- round(rnorm(100),2)
+x2 <- round(rnorm(100),2)
+error <- round(rnorm(100),2)
+y <- 2*x1+3*x2 +error
+
+x1_tilda <- 1/100*x1
+
+X <- cbind(1,x1,x2)
+X_tilda <- cbind(1,x1_tilda,x2)
+
+beta <- solve(t(X)%*%X) %*% t(X)%*%y
+beta_w <- solve(t(X_tilda) %*% X_tilda) %*% t(X_tilda)%*%y
+
+
+rss <- function(x,y,b){
+  sum((y-round(x%*%b,2))^2)
+}
+rssX <- rss(X,y,beta) # RSS for X
+rssX_tilda <- rss(X_tilda,y,beta_w) # RSS for X_tilda
+print('The RSS are:')
+cbind(rssX,rssX_tilda) # RSS are the same
+
+```
+
+
+```{r}
+## b.
+# values of coefficients
+coefs <-as.data.frame(cbind(beta,beta_w))
+colnames(coefs) <- c("beta","beta_2")
+coefs # check for coefs
+```
+
+
+```{r}
+#c
+# values of fitted value
+y_hat <- X%*%beta
+yw_hat <- X_tilda %*%beta_w
+
+df <- as.data.frame(cbind(y_hat,yw_hat))
+colnames(df) <- c("y_hat","yw_hat")
+head(df) # values for fitted value are the same
+```
+
+#
+
+```{r}
+## d.
+# fitted value in ridge regression are different
+lambda = 0.5
+ridge_beta <- round(solve(t(X)%*%X+diag(lambda,ncol(t(X)%*%X)))%*%t(X)%*%y,2)
+ridge_beta_w <- round(solve(t(X_tilda)%*%X_tilda+
+                              diag(lambda,ncol(t(X_tilda)%*%X_tilda)))%*%t(X)%*%y,2)
+
+y_hat_ridge <- X%*%ridge_beta
+yw_hat_ridge <- X_tilda%*%ridge_beta_w
+
+ridge_y <- as.data.frame(cbind(y_hat_ridge,yw_hat_ridge))
+colnames(ridge_y) <- c("y_hat_ridge","y_hat_ridge")
+head(ridge_y) 
+```
+
+## f.
+
+The fitted values for two models are different.
+
+```{r}
+library(FNN)
+y_pred_train <- knn.reg(train = X[,-1], test = X[,-1], y = y, k = 3)$pred
+yw_pred_train <- knn.reg(train = X_tilda[,-1], test = X_tilda[,-1], y = y, k = 3)$pred
+
+y_pred_train == yw_pred_train
+
+```
+
+
+
+
+

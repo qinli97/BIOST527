@@ -1,0 +1,381 @@
+---
+title: "Biostat527_HW1"
+author: "Qin Li"
+date: "4/3/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1.
+
+## a.
+
+For any iid random variables, $$
+P(minY_i\geq y)=(1-F(y))^N
+$$ If we have N iid distributed $x_i$ in the unit ball in p dimensions, then $P(min\|x_i\| >r) = (1-F(r))^N$, $F(r) = P(\|x_i\|\leq r) = \frac{Cr^p}{C1^p}$, the probability that the point lies in the ball of radius r within the ball of unit radius $\frac{1}{2} = P(min\|x_i\|>r) = (1-r^p)^N$, so that we have $d(p,N) = (1-0.5^{\frac{1}{N}})^{\frac{1}{p}}$
+
+## b.
+
+```{r}
+library(ggplot2)
+# function of median distance
+dnp <- function(p,N){
+  #d = (1-0.5^(1/N))^(1/p)
+  d = (1-0.5^(1/N))^(1/p)
+  return(d)
+}
+
+p <- seq(1,10)
+N <- seq(100,1000, length.out = length(p))
+allN <- as.vector(t(replicate(length(p),N)))
+mat <- matrix(NA, nrow = length(allN),ncol = 3)
+colnames(mat) <- c('p','N','d')
+mat[,1] <- p
+mat[,2] <- allN
+for (i in 1:nrow(mat)){
+  mat[i,3] <- dnp(mat[i,1],mat[i,2])
+}
+mat <- as.data.frame(mat)
+mat$N <- factor(mat$N)
+ggplot(mat, aes(x = p, y = d,col = N)) + geom_smooth(se = F) +
+  ggtitle("dimension & median distance")
+
+```
+
+## c.
+
+When the number of dimensions are the same, the median distance from the origin decreases as the number of data point increases; whereas when keeping the number of data point the same, the median distance from the origin increases as the number of dimension increases. As the dimensionality increases, the sample points will be sparsely distributed in the sample space, in order to cover more areas of the sample space, we need to have more samples, this is how it related to curse of dimensionality.
+
+# 2.
+
+## a.
+
+$L(p) = 0.1^{\frac{1}{p}}$
+
+## b.
+
+```{r}
+p = seq(1,200)
+Lp <- 0.1^(1/p)
+plot(x = p, y = Lp, main = "p - L(p)", xlab = "p", ylab = "L(p)", type = "l")
+```
+
+## c.
+
+As the number of dimension increases, the length of the side of this smaller hypercube that contains 10% of the volume of the original hypercube also increases. This means that if we want to capture 10% of the volume of original hypercube in high dimension of KNN, we'll need to have a wider range of the smaller hypercube, and the length will be very close to 1, which is the length of the unit hypercube.
+
+# 3.
+
+## a. 
+In linear models, we have
+
+$$
+\hat{f}(x_0) = x_0^T\hat{\beta}
+$$
+where when we try to minimize RSS, we can solve $\beta$ so that $\beta = (X^TX)^(-1)X^TY$. Thus, we have, 
+$$
+\hat{f}(x_0) = x_0^T(X^TX)^{-1}X^TY
+$$
+If we take $a = x_0^T(X^TX)^{-1}X$, then we can get the explicit expression for $l_i(x_0,X) = a_i^T$, where a is a N*1 vector. 
+
+## b. 
+In K-NN regression, we have the prediction as 
+$$
+\hat{f}(x_0) = \frac{1}{k}\sum_{x_i\in N_k(X)}y_i
+$$
+Thus, 
+$$
+\hat{f}(x_0) =\sum_{i=1}^N l_i(x_0;X)y_i = \frac{1}{k}\sum_{x_i\in N_k(X)}y_i
+$$
+which gives us $l_i(x_0,X) = \frac{1}{k}$. 
+
+
+# 4. 
+```{r}
+library(glmnet)
+zip_train <- read.table(gzfile("zip.train"))
+zip_test <- read.table(gzfile("zip.test"))
+colnames(zip_train)[1] <- "id"
+colnames(zip_test)[1] <- "id"
+train58 <- zip_train[which(zip_train$id==5 |zip_train$id ==8),]
+test58 <- zip_test[which(zip_test$id==5|zip_test$id==8),]
+
+# if id is 5, encode it as 1, otherwise 0 in both training and test set
+train58$id <- ifelse(train58$id ==5, 1,0)
+test58$id <- ifelse(test58$id ==5, 1,0)
+
+#linear regression
+zip.lm <- lm(id~., data = train58)
+
+# calculate the training set classification error
+lm.probs.train <- predict(zip.lm,train58,type = "response")
+lm.pred.train <- ifelse(lm.probs.train>0.5, 1,0)
+# attach(train58)
+table(lm.pred.train, train58$id)
+lm.trainerror <-mean(lm.pred.train != train58$id)
+
+# calculate the test set classification error
+lm.probs.test <- predict(zip.lm, test58, type = "response")
+lm.pred.test <- ifelse(lm.probs.test >0.5,1,0)
+# attach(test58)
+table(lm.pred.test,test58$id)
+lm.testerror <- mean(lm.pred.test != test58$id) 
+
+# KNN classification
+library(class)
+library(mclust)
+knn_train <- function(k){
+  knn.pred.train <- knn(train = train58[,-1], test = train58[,-1], cl = train58$id, k = k)
+  # knn.trainerror <- classError(knn.pred.train, train58[,1])$errorRate
+  table(knn.pred.train,train58$id)
+  return(mean(knn.pred.train!=train58$id))
+}
+knn_test <- function(k){
+  knn.pred.test <- knn(train = train58[,-1], test = test58[,-1],cl = train58$id, k = k)
+  #knn.testerror <- classError(knn.pred.test, test58[,1])$errorRate
+  table(knn.pred.test,test58$id)
+  return(mean(knn.pred.test!=test58$id))
+}
+
+
+
+k <- seq(2,20)
+knn_error <- matrix(NA, ncol = 2, nrow = length(k))
+colnames(knn_error) <- c("knn_train","knn_test")
+for (i in k){
+  knn_error[i-1,1] <- knn_train(i)
+  knn_error[i-1,2] <- knn_test(i)
+}
+mat <- matrix(NA, ncol = 4, nrow = length(k))
+colnames(mat) <- c("k","1/k","KNN train error", "KNN test error")
+mat[,1] <- k
+mat[,2] <- 1/k
+mat[,c(3,4)] <- knn_error
+mat <- as.data.frame(mat)
+
+ggplot(mat, aes(x = mat[,2]))+
+  geom_line(aes(y = mat[,3]), color = "blue")+
+  geom_line(aes(y = mat[,4]), color = "red") +
+  xlab("1/k")+ylab("Error") + ggtitle("KNN classification error")+
+  theme_bw()
+min_testerror <- min(knn_error[,2])
+which(knn_error[,2] == min_testerror) +1
+
+df.error <- as.data.frame(matrix(NA, nrow = 2, ncol = 2))
+colnames(df.error) <- c("training error","test error")
+row.names(df.error) <- c("linear reg", "KNN")
+df.error[1,1] <- lm.trainerror
+df.error[1,2] <- lm.testerror
+df.error[2,] <- knn_error[2,]
+df.error
+```
+
+In the plot, the blue curve represents the training error, the red curve represents the test error. There are several k values produce the minimal prediction error in KNN (k = 3,5,7,15,19), we could choose k =3 for simplicity. Based on the table, it seems like KNN gives a slightly smaller test error than the linear regression approach. 
+
+
+# 5. 
+
+## a. 
+Assume $f(x_1+x_2) = x_1^3+\sin(x_2)$, so our model is $y = x_1^3+\sin(x_2) + \epsilon, \epsilon \sim N(0,\sigma^2$
+We could simulate 100 data points for each of x1 and x2, and we will get the correspondence value for f(x1,x2) and y. 
+
+```{r}
+fx <- function(x1,x2){
+  f <- x1^3+x2^2
+  return(f)
+}
+# set a seed for reproduce
+set.seed(33)
+# add in random noise
+noise <- rnorm(1,0,1)
+
+x1 <- runif(100, 5,20)
+x2 <- runif(100,5,20)
+
+matq5 <- as.data.frame(matrix(NA, ncol = 4, nrow = 100))
+colnames(matq5) <- c("x1","x2","f(x1,x2)","yhat")
+matq5[,1] <- x1
+matq5[,2] <- x2
+for (i in 1:100){
+  matq5[i,3] <- fx(x1[i],x2[i])
+}
+matq5[,4] <- matq5[,3] + noise
+
+
+```
+
+## b.
+```{r}
+ggplot(matq5, aes(x = x1, y = x2, col = matq5[,3]))+geom_point()
+```
+
+## c. 
+
+```{r}
+train5c <- matq5
+# set a new seed to generate another set of data for test set
+set.seed(605)
+x1 <- runif(100, 5,20)
+x2 <- runif(100,5,20)
+# create a new df for test data
+test5c <- as.data.frame(matrix(NA, ncol = 4, nrow = 100))
+colnames(test5c) <- c("x1","x2","f(x1,x2)","yhat")
+test5c[,1] <- x1
+test5c[,2] <- x2
+for (i in 1:100){
+  test5c[i,3] <- fx(x1[i],x2[i])
+}
+test5c[,4] <- test5c[,3] + noise
+
+
+```
+
+## d.
+
+```{r}
+library(MLmetrics)
+library(FNN)
+lm.5d <- lm(yhat~x1+x2, data = train5c)
+lm.trainMSE <- MSE(predict(lm.5d,data = train5c),train5c$yhat)
+lm.testMSE <- MSE(predict(lm.5d, data = test5c), test5c$yhat)
+
+knn.train5c <- function(k){
+  knn5.trainpred <- knn.reg(train = train5c[,c(1,2)], test = train5c[,c(1,2)], y = train5c[,4],k = k)
+  knn.trainMSE <- MSE(knn5.trainpred$pred, train5c$yhat)
+  return(knn.trainMSE)
+}
+
+knn.test5c <- function(k){
+  knn5.testpred <- knn.reg(train = train5c[,c(1,2)], test = test5c[,c(1,2)], y = train5c[,4],k = k)
+  knn.testMSE <- MSE(knn5.testpred$pred, test5c$yhat)
+  return(knn.testMSE)
+}
+
+k <- seq(2,20)
+df5d <- as.data.frame(matrix(NA, ncol = 3, nrow = length(k)))
+colnames(df5d) <- c("K", "KNN train error","KNN test error")
+df5d[,1] <- k
+for (i in k){
+  df5d[i-1,2] <- knn.train5c(i)
+  df5d[i-1,3] <- knn.test5c(i)
+}
+
+plot(k,df5d[,2], type = "l", col = 'blue', xlab = "k", ylab = "MSE", main = "Training and Test error of LS and KNN")
+lines(k, df5d[,3], type = "l", col = 'red')
+
+legend("right", legend = c("KNN train","KNN test"), col = c('blue','red'),lty = c(1,1))
+
+
+
+
+```
+
+## e.
+
+In linear regression model, we could see that the test error is very different from the training error. It is predictable because we are fitting a linear model on a non-linear function, so the model won't fit the test set well.The training error for the linear regression is 380232.9, and test error is 9524369. In the KNN model, MSE increases as the number of k increases, of the same number of k, the test error is always greater than the training MSE. Overall, KNN regression performs better than the linear regression model. 
+
+## f.
+```{r}
+newfx <- function(x1,x2){
+  y <- 2*x1+5*x2
+  return(y)
+}
+set.seed(65)
+noise <- rnorm(1,0,1)
+x1 <- runif(100, 5,20)
+x2 <- runif(100,5,20)
+
+df5 <- as.data.frame(matrix(NA, ncol = 4, nrow = 100))
+colnames(df5) <- c("x1","x2","f(x1,x2)","yhat")
+df5[,1] <- x1
+df5[,2] <- x2
+for (i in 1:100){
+  df5[i,3] <- newfx(x1[i],x2[i])
+}
+df5[,4] <- df5[,3] + noise
+
+ggplot(df5, aes(x = x1, y = x2, col = df5[,3]))+geom_point()
+
+```
+
+```{r}
+train5f <- df5
+# set a new seed to generate another set of data for test set
+set.seed(67)
+x1 <- runif(100, 5,20)
+x2 <- runif(100,5,20)
+# create a new df for test data
+test5f <- as.data.frame(matrix(NA, ncol = 4, nrow = 100))
+colnames(test5f) <- c("x1","x2","f(x1,x2)","yhat")
+test5f[,1] <- x1
+test5f[,2] <- x2
+for (i in 1:100){
+  test5f[i,3] <- newfx(x1[i],x2[i])
+}
+test5f[,4] <- test5f[,3] + noise
+
+lm.5f <- lm(yhat~x1+x2, data = train5f)
+lm.trainMSE2 <- MSE(predict(lm.5f,data = train5f),train5f$yhat)
+lm.testMSE2 <- MSE(predict(lm.5f, data = test5f), test5f$yhat)
+
+knn.train5f <- function(k){
+  knn5.trainpred2 <- knn.reg(train = train5f[,c(1,2)], test = train5f[,c(1,2)], y = train5f[,4],k = k)
+  knn.trainMSE2 <- MSE(knn5.trainpred2$pred, train5f$yhat)
+  return(knn.trainMSE2)
+}
+
+knn.test5f <- function(k){
+  knn5.testpred2 <- knn.reg(train = train5f[,c(1,2)], test = test5f[,c(1,2)], y = train5f[,4],k = k)
+  knn.testMSE2 <- MSE(knn5.testpred2$pred, test5f$yhat)
+  return(knn.testMSE2)
+}
+
+k <- seq(2,20)
+df5f <- as.data.frame(matrix(NA, ncol = 3, nrow = length(k)))
+colnames(df5f) <- c("K", "KNN train error","KNN test error")
+df5f[,1] <- k
+for (i in k){
+  df5f[i-1,2] <- knn.train5f(i)
+  df5f[i-1,3] <- knn.test5f(i)
+}
+
+plot(k,df5f[,2], type = "l", col = 1, xlab = "k",ylim = c(0,35), ylab = "MSE", main = "Training and Test error of KNN")
+lines(k, df5f[,3], type = "l", col = 2)
+legend("right", legend = c("KNN train","KNN test"),col = c(1,2),lty = c(1,1))
+
+```
+Now we have $f(x_1,x_2) = 2x_1+5_x2$, again, we have a very different value for linear testing error and training error. The testing error for KNN increases as the number of k increases. KNN regression gives a smaller testing error than linear regression, however, the linear regression has a really small training error (8.43e-26) which is very close to zero, and a test error of 1115.58. 
+
+# 6. 
+## a. 
+
+We could write $\hat{f}(x_i)$ in terms of $H$ and $Y$, so that $\hat{f}(x_i) = HY$, then the $i^{th}$ element of $\hat{f}(x_i)$ is $\hat{f_i}(x_i) = \sum_{i}H_{ij}Y_j$. 
+
+Define Z, where $Z_j = Y_j$ if $j\neq i$, $Z_j = \hat{f}(x_i)^{-i}$ if $j = i$. Thus we have $\hat{f_i}(x_i) = \sum_{i}H_{ij}Y_j$, $\hat{f_i}^{-i}(x_i) = \sum_{i}H_{ij}Z_j$. Therefore, $Y_i-\hat{f_i}^{-i}(x_i) = \sum_jH_{ij}(Y_j-Z_j) = H_{ii}(Y_i-\hat{f_i}^{-i})$. 
+
+Now we have the equation, $\hat{f_i}^{-i} = \hat{f}(x_i)-H_{ii}Y_i+H_{ii}\hat{f_i}^{-i}$, so
+$$
+Y_i - \hat{f_i}^{-i} = Y_i-\hat{f}(x_i)-H_{ii}Y_i+H_{ii}\hat{f_i}^{-i} 
+$$
+
+$$Y_i - H_{ii}Y_i - \hat{f_i}^{-i}- H_{ii}\hat{f_i}^{-i}  = Y_i - \hat{f}(x_i)$$
+
+$$Y_i - \hat{f_i}^{-i} = \frac{Y_i-\hat{f}(x_i)}{1-H_{ii}}$$
+
+## b.
+
+This is to show that $1-H_{ii} \leq 1$.
+$H = X(X^TX)^{-1}X^T$, $H^T = (X(X^TX)^{-1}X^T)^T = X(X^TX)^{-1}X^T$, so that H is symmetric and ideponent, such that $H = H^T, H^2=H$. 
+The $ii^{th}$ position of H and $H^2$ is $H_{ii} = \sum_{j=1}^{N}H_{ij}^2 \geq H_{ii}^2$. We could get $H_{ii}\geq H_{ii}^2$, which is equivalent to $H_{ii}(1-H_{ii})\geq 0$, since $H_{ii} \geq 0$, thus we have  $0\leq H_{ii} \geq 1$. Since  $0\leq H_{ii} \geq 1$, implies $1-H_{ii} \leq 1$, so that LOOCV = $\sum_{i=1}^{N}(\frac{y_i=\hat{f}(x_i)}{1-H_{ii}})^2$ is alwasys greater than or equal to the training error $\sum_{i = 1}^{N}(y_i-\hat{f}(x_i))^2$. 
+
+
+
+
+
+
+
+
+

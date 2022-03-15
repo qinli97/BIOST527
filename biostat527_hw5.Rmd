@@ -1,0 +1,236 @@
+---
+title: "biostat527_hw5"
+author: "Qin Li"
+date: "6/4/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1.
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw5_q1.png")
+
+```
+
+# 2.
+
+## a.
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw5_q2a.png")
+
+```
+
+## b &c 
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw5_q2bc.png")
+
+```
+
+## d/e/f
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw5_q2.png")
+
+```
+
+
+# 3.
+
+## a.
+
+The two numbers are quiet close. 
+
+```{r}
+
+n = 100
+mu  <- 5; sigma <- 3
+
+B <- 10
+
+set.seed(209)
+
+boot_list <- list()
+samples <- list()
+x1.bootmeans <- c()
+x2.bootmeans <- c()
+for (i in 1:1000){
+  x <- rnorm(n,mu,sigma)
+  boot_list[[i]] <- x
+  
+  boot_sample <- list()
+  for (b in 1:B) {
+    boot <- sample(x,n,replace = T, prob = rep(1/n,n))
+    boot_list[[b]] <- boot
+  }
+  samples[[i]] <- boot_list
+  x1.bootmeans[[i]] <- mean(samples[[i]][[1]])
+  x2.bootmeans[[i]] <- mean(samples[[i]][[2]])
+}
+
+var_x1_q1 <- round(((2*n-1)/n^2)*(sigma^2),3)
+
+x1.bootmeans <- unlist(x1.bootmeans)
+x2.bootmeans <- unlist(x2.bootmeans)
+
+var_x1_boot <- round(var(x1.bootmeans),3)
+
+var.df <- data.frame(var_x1_q1,var_x1_boot)
+var.df
+
+```
+
+## b.
+
+```{r}
+
+cov_x1x2 <- round(cov(x1.bootmeans,x2.bootmeans),3)
+
+cov_x1x2_q2 <- round(sigma^2/n,3)
+
+
+cov.df <- data.frame(cov_x1x2,cov_x1x2_q2)
+cov.df
+
+```
+## c
+
+```{r}
+cor.boot <- round(n/(2*n-1),3)
+cor_x1x2 <- round(cor(x1.bootmeans,x2.bootmeans),3)
+
+cor.df <- data.frame(cor_x1x2,cor.boot)
+cor.df
+```
+## d
+
+```{r}
+var.xbag <- round(sigma^2/n^2*(n+(n-1)/B),3)
+
+xbags.boot <- c()
+for (i in 1:1000) {
+  xbag <- mean(unlist(samples[i]))
+  xbags.boot[[i]] <- xbag
+}
+
+var.xbag.boot <- round(var(unlist(xbags.boot)),3)
+xbag.df <- data.frame(var.xbag,var.xbag.boot)
+xbag.df
+```
+## e.
+```{r}
+var.xbar <- round(sigma^2/n,3)
+
+sample.means <- c()
+for (i in 1:1000) {
+  means <- mean(unlist(boot_list[i]))
+  sample.means[[i]] <- means
+}
+
+var.means.boot <- round(var(unlist(sample.means)),3)
+
+
+var.xbar.df <- data.frame(var.xbar ,var.means.boot)
+var.xbar.df
+
+```
+
+
+# Q4
+
+## a & b. 
+
+From the plot, we could see that if we want an optimal seperating hyperplane, it must goes through the mid point between (2,1) and (2,2), and (4,3) & (4,4). 
+Thus, we have $X1-X2-0.5 = 0$. 
+
+```{r}
+library(ggplot2)
+n = 7
+p =2
+x1 = c(3,2,4,1,2,4,4)
+x2 = c(4,2,4,4,1,3,1)
+Y = c("Red","Red","Red","Red","Blue","Blue","Blue")
+
+mat <- cbind(x1,x2,Y)
+df <- as.data.frame(mat)
+
+plot(x = x1,y = x2, col = Y, type = "p")
+abline(-0.5,1)
+```
+
+## c.
+
+We will classify points to red if $X1-X2-0.5 \leq 0$, and classify points to blue if $X1-X2-0.5 \geq 0$. $\beta_0 = -0.5$, $\beta_1 =1$, $beta_2 = -1$. 
+
+## d. 
+
+The margin is 1/4. 
+
+```{r}
+plot(x1, x2, col = Y, type = "p")
+abline(-0.5, 1)
+abline(-1, 1, lty = 2)
+abline(0, 1, lty = 2)
+
+```
+
+## e. 
+
+The support vectors are (2,1), (2,2), (4,3) and (4,4). 
+
+## f. 
+
+Since the only the support vectors will affect the margin of the maximal margin hyperplane, and (4,1) is not anywhere near the hyperplane, thus slightly move the point will not make a change to the maximal margin hyperplane. 
+
+## g. 
+
+The equation for this hyperplane is $X1-X2-0.1 = 0$
+
+```{r}
+plot(x1, x2, col = Y, type = "p")
+abline(-0.1,1)
+
+
+```
+
+
+## h. 
+
+```{r}
+plot(x1, x2, col = Y, type = "p")
+points(c(3),c(3), col = "blue")
+
+```
+
+
+# 5. 
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw5_q51.png")
+
+```
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw5_q52.png")
+
+```
+
+# 6.
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw5_q6.png")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

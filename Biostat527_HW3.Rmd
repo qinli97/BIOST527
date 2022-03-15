@@ -1,0 +1,397 @@
+---
+title: "biostat527_hw3"
+author: "Qin Li"
+date: "5/6/2021"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(tidyverse)
+```
+
+# 1.
+
+## a.
+
+```{r}
+library(MASS)
+library(ggplot2)
+
+set.seed(5100)
+n = 500
+p = 2
+k = 2
+mu1 <- c(5,12)
+mu2 <- c(3,7)
+Sigma <- matrix(c(3,0.4,0.4,5),2,2)
+fx1 <- mvrnorm(n,mu1,Sigma)
+fx2 <- mvrnorm(n,mu2,Sigma)
+
+dat <- data.frame(x1 = c(fx1[,1],fx2[,1]),
+                  x2 = c(fx1[,2],fx2[,2]),
+                  y = c(rep(0,n),rep(1,n)))
+
+
+ggplot(dat,mapping = aes(x1,x2,col = y))+geom_point()
+
+
+```
+
+We generate x1 using two multinomial distributions, the first half of x1 is generated using $\mu_1$, and the second half of the x1 is generated using $\mu_2$. We do the same for x2. Thus, we define the first half of the x1,x2 as class 1, and the last half of x1,x2 as class 2.
+
+## b.
+
+```{r}
+
+library(MLmetrics)
+set.seed(564)
+prop <- sample(1000,500)
+train <- dat[prop,]
+test <- dat[-prop,]
+
+# LDA
+model.lda <- lda(y~., data = train)
+
+train.lda.pred <- predict(model.lda, newdata = train)$class
+test.lda.pred <- predict(model.lda, newdata = test)$class
+lda.train.acc <- Accuracy(train.lda.pred,train$y)
+lda.test.acc <- Accuracy(test.lda.pred, test$y)
+
+model.qda <- qda(y~., data = dat, subset = prop)
+train.qda.pred <- predict(model.qda, newdata = train)$class
+test.qda.pred <- predict(model.qda, newdata = test)$class
+qda.train.acc <- Accuracy(train.qda.pred, train$y)
+qda.test.acc <- Accuracy(test.qda.pred, test$y)
+
+err.mat <- data.frame('train'= c(1-lda.train.acc,1-qda.train.acc),
+                      'test' = c(1-lda.test.acc,1-qda.test.acc))
+rownames(err.mat) <- c("LDA","QDA")
+err.mat
+
+```
+
+## c.
+
+```{R}
+set.seed(5666)
+n = 500
+p = 2
+k = 2
+mu1 <- c(5,9)
+mu2 <- c(7,12)
+Sigma1 <- matrix(c(3,0.7,0.7,5),2,2)
+Sigma2 <- matrix(c(5,0.4,0.4,7),2,2)
+fx1 <- mvrnorm(n,mu1,Sigma1)
+fx2 <- mvrnorm(n,mu2,Sigma2)
+
+dat2 <- data.frame(x1 = c(fx1[,1],fx2[,1]),
+                  x2 = c(fx1[,2],fx2[,2]),
+                  y = c(rep(0,n),rep(1,n)))
+
+ggplot(dat2,mapping = aes(x1,x2,col = y))+geom_point()
+
+
+```
+
+Here, we generate half of the x1 from $N(\mu_1, \sigma_1)$, label it class 1, and the other half from $N(\mu_2,\sigma_2)$, label it class 2.
+
+Same for x2, we generate half of the x2 from $N(\mu_1, \sigma_1)$, label it class 1, and the other half x2 from $N(\mu_2,\sigma_2)$, label it class 2.
+
+## d.
+
+```{r}
+set.seed(687)
+prop <- sample(1000,500)
+train <- dat2[prop,]
+test <- dat2[-prop,]
+
+# LDA
+model.lda <- lda(y~., data = train)
+train.lda.pred <- predict(model.lda, newdata = train)$class
+test.lda.pred <- predict(model.lda, newdata = test)$class
+lda.train.acc <- Accuracy(train.lda.pred,train$y)
+lda.test.acc <- Accuracy(test.lda.pred, test$y)
+
+model.qda <- qda(y~., data = dat2, subset = prop)
+train.qda.pred <- predict(model.qda, newdata = train)$class
+test.qda.pred <- predict(model.qda, newdata = test)$class
+qda.train.acc <- Accuracy(train.qda.pred, train$y)
+qda.test.acc <- Accuracy(test.qda.pred, test$y)
+
+err.mat2 <- data.frame('train'= c(1-lda.train.acc,1-qda.train.acc),
+                      'test' = c(1-lda.test.acc,1-qda.test.acc))
+rownames(err.mat2) <- c("LDA","QDA")
+err.mat2
+```
+## e. 
+
+From b). since we are generating data from LDA model, the decision boundary is linear. However, the test error in the QDA model is slightly smaller than the test error in the LDA model, whereas the two model give same error rate in the training model it might indicate that with a more flexible model, the variance will be higher in the QDA, but low bias; but a less flexible model LDA will give a low bias (in training model), but give a higher variance in test set. 
+
+From d), we generate data from QDA model, LDA gives a smaller training error than QDA, but a higher test error in LDA compare to QDA model. Thus, a more flexible model will give a higher bias in training error, but lower variance. 
+
+# 2.
+
+## a.
+
+Logratio should be the response, and range should be the predictor. Since we are interested in whether we detect light at a certain range, then the logratio should be the response.
+
+```{r}
+library(mltools)
+library(SemiPar)
+data(lidar)
+lidar.lm <- lm(logratio~range, data = lidar)
+lidar.qd <- lm(logratio~poly(range,2,raw = TRUE), data = lidar)
+lidar.dg6 <- lm(logratio~poly(range,6,raw = TRUE), data = lidar)
+lidar.dg8 <- lm(logratio~poly(range,8,raw = TRUE), data = lidar)
+
+plot(lidar$range,lidar$logratio)
+lines(lidar$range, predict(lidar.lm),col = 1)
+lines(lidar$range, predict(lidar.qd),col = 2)
+lines(lidar$range, predict(lidar.dg6),col = 3)
+lines(lidar$range, predict(lidar.dg8), col = 4)
+legend("topright",lty = seq(1,4),col = seq(1,4), 
+       legend = c("linear","quadratic","degree 6","degreee 8"))
+
+```
+
+## c.
+
+In the training set, as the degree of polynomial increases, the MSE decreases. However, in the test set, the smallest MSE occurs at degree 9. The MSE of training set and test set interwines a lot over the degrees of 1 to 12. 
+
+```{r, warning=FALSE}
+
+set.seed(677)
+deg <- seq(1,12)
+n = dim(lidar)[1]
+splt <- sample(n,floor(n/2))
+train <- lidar[splt,]
+test <- lidar[-splt,]
+
+mse.mat <- matrix(0,nrow = 12, ncol = 2)
+
+for (i in deg){
+  mod <- lm(logratio~poly(range,deg[i],raw = TRUE), data = train)
+  mse.mat[i,1] <- mean((train$logratio-predict(mod,newdata = train,type = "response"))^2)
+  mse.mat[i,2] <- mean((test$logratio-predict(mod,newdata = test,type = "response"))^2)
+}
+which.min(mse.mat[,2])
+
+plot(seq(1:12),mse.mat[,1], col = "blue", main = "MSE in training and test set",type = "l",
+     ylim = c(min(mse.mat),max(mse.mat)))
+
+lines(seq(1:12),mse.mat[,2],col = "red", main = "MSE in test set",type = "l")
+
+legend("right",lty = seq(1,1),col = c("blue","red"), legend = c("train","test"))
+```
+
+## d.
+
+```{r}
+library(splines)
+spline.df4 <- lm(logratio~bs(range, df=4),data = lidar)
+df4.pred <- predict(spline.df4, newdata = lidar)
+spline.df6 <- lm(logratio~bs(range, df=6),data = lidar)
+df6.pred <- predict(spline.df6, newdata = lidar)
+spline.df8 <- lm(logratio~bs(range, df=8),data = lidar)
+df8.pred <- predict(spline.df8, newdata = lidar)
+spline.df12 <- lm(logratio~bs(range, df=12),data = lidar)
+df12.pred <- predict(spline.df12,newdata = lidar)
+
+plot(lidar$range, lidar$logratio)
+lines(lidar$range, df4.pred,col = 1)
+lines(lidar$range, df6.pred,col = 2)
+lines(lidar$range, df8.pred,col = 3)
+lines(lidar$range, df12.pred, col = 4)
+legend("topright",lty = c(1,1,1,1),col = seq(1,4), 
+       legend = c("df4","df6","df8","df12"))
+
+```
+
+## e.
+
+```{r,, warning=FALSE}
+
+df <- seq(4,12)
+
+set.seed(888)
+n = dim(lidar)[1]
+ind <- sample(n, n/2)
+train <- lidar[ind,]
+test <- lidar[-ind,]
+
+mse.mat2 <- matrix(0,nrow = length(df),ncol = 2)
+for (i in df){
+  mod <- lm(logratio~bs(range, df = i), data = train)
+  train.pred <- predict(mod, newdata = train)
+  train.mse <- MSE(train.pred,train$logratio)
+  test.pred <- predict(mod, newdata = test)
+  test.mse <- MSE(test.pred,test$logratio)
+  mse.mat2[i-3,1] <- train.mse
+  mse.mat2[i-3,2] <- test.mse
+}
+
+which.min(mse.mat2[,2])+3
+plot(seq(4:12),mse.mat2[,1], col = "blue", main = "MSE in training set",
+     type = "l",
+     ylim = c(min(mse.mat2),max(mse.mat2)))
+
+lines(seq(4:12),mse.mat2[,2],col = "red", 
+      main = "MSE in test set",type = "l")
+
+legend("topright",lty = seq(1,1),col = c("blue","red"), 
+       legend = c("train","test"))
+
+```
+
+In the test set, when the degree of freedom equals to 6, the model gives the best prediction performance. In this case, MSE in the training set is obviously lower than the error in test set. 
+
+# 3.
+
+## a.
+
+As $\lambda \to \infty$ and $m=0$, $g(t)$ has to be zero everywhere, thus $\hat{g}$ will be the x-axis.
+
+## b.
+
+As $\lambda \to \infty$ and $m=1$, $g^{(1)} (t)$ need to be zero everywhere under $\lambda \to \infty$, therefore, $\hat{g}$ is a constant, therefore the curve will be a horizontal line.
+
+## c.
+
+As As $\lambda \to \infty$, $g^{(2)} (t)$ need to be zero everywhere, $\hat{g}$ is a order one least square fitted line.
+
+## d.
+
+As $\lambda \to \infty$, $g^{(3)} (t)$ need to be zero everywhere, $\hat{g}$ is a order 2 polynomial regression fitted line.
+
+## e
+
+As $\lambda \to 0$, the penalty to the loss function is almost not existed. Therefore, $\hat{g}$ can be any function that could interpolate the data points.
+
+# 4.
+
+$$
+f(X) = \sum_{1}^{6} beta_i h_i(X)
+$$
+
+For any $\psi_i$, we let $f'(\psi_i) = 0$ and $f"(\psi_i)=0$, thus we will have $f(X) = \sum_{1}^{6} beta_i h_i(X) = 0$, and further with $f(X) = \sum_{1}^{4} beta_i h_i(X) = 0, for X \leq \alpha$. Suppose $f_1(X), f_2(X),f_3(X)$ are cubics, then we have 
+$$
+f(X) = f_1(X)1_{X \leq \psi_i} + f_2(X)1_{\psi_1 \leq X \leq \psi_2} + f_3(X)1_{X \geq \psi_2}
+$$ 
+where f(X) depends on the value of X. $f_1(X)$ is a linear combination of $h_1(X), h_2(X), h_3(X), h_4(X)$, which $h_4(X)$ contains a cubic term, so $f_1(X)$ is a cubic spline. And 
+$f_2(X) = f_1(X) + h_5(X) = f_1(X) + \beta (X-\psi)_{+}^3$, 
+for $\psi_1 \leq X < \psi_2$. Thus we could write $f(X)$ as 
+$f_i(X) = \sum_{k=0}^3 c_k^{(i)}(X-\psi_i)^k$.
+
+Since it is a spline method, it has the property that 
+$$
+f_1(\psi_1) = f_2(\psi_1) \to c_0^{(1)} = c_0^{(2)},
+f_1'(\psi_1) = f_2'(\psi_1) \to c_1^{(1)} = c_1^{(2)},
+f_1"(\psi_1) = f_2"(\psi_1) \to c_2^{(1)} = c_2^{(2)},
+$$ 
+for $i = 1 and 2$, and $\psi_1 \leq X < \psi_2$. Thus we have 
+$\beta = c_3^{(2)}-c_3^{(1)}$ when $\psi_1 \leq X \leq \psi_2$. Thus we could see that the cubic spline at know $\psi_1$ is a linear combination of $h_1(X), h_2(X), h_3(X), h_4(X),h_5(X)$. Similarly, we could do the
+same procedure for knot $\psi_2$. So, any linear combination of the functions $h_1(X), h_2(X), h_3(X), h_4(X), h_5(X), h_6(X)$ is a cubic spline with knots at $\psi_1, \psi_2$.
+
+# 5.
+
+```{r}
+set.seed(509)
+x <- runif(50)
+err <- rnorm(50)
+y <- x^2+sin(x)+err
+
+# linear 
+x.linear <- cbind(rep(1,50),x)
+mod.linear <- lm(y~x)
+var.linear <- round(summary(mod.linear)$sigma * x.linear %*% 
+                      solve(t(x.linear)%*%x.linear) %*% t(x.linear),3)
+
+# cubic polynomial
+x.cubic <- cbind(rep(1,50), x, x^2, x^3)
+mod.cubic <- lm(y~x.cubic[,-1])
+var.cubic <- round(summary(mod.cubic)$sigma * x.cubic %*% 
+                     solve(t(x.cubic)%*%x.cubic) %*% t(x.cubic),3)
+
+# cubic spline
+cubic.spline <- lm(y~bs(x,knots = c(0.33,0.66)))
+fx <- model.matrix(cubic.spline)
+var.cubic.spline <- round(summary(cubic.spline)$sigma * fx %*% 
+                            solve(t(fx)%*%fx) %*% t(fx),3)
+
+# NCB 
+kn <- seq(0.1,0.9, length.out = 6)
+ncb <- lm(y~ns(x, knots = kn))
+nx <- model.matrix(ncb)
+var.ncb <- summary(ncb)$sigma * nx %*% solve(t(nx)%*%nx) %*% t(nx)
+
+xs <- round(rep(x,4),3)
+Var <- c(diag(var.linear), diag(var.cubic), diag(var.cubic.spline), diag(var.ncb))
+
+q5.df <- data.frame('x' = xs, 'var' = Var, 'model' = c(rep("linear",50),
+                                                       rep("cubicPolynomil",50),
+                                                       rep("cubic spline",50),
+                                                       rep("Natural cubic Spline",50)))
+ggplot(q5.df, aes(x = x, y = Var, col = model)) +
+  geom_point() + geom_line()
+```
+
+# 6.
+
+## a.
+
+If $X \leq \psi_1$, $f(X) = \sum_{j=0}^3 \beta_j X^j$, since we add the contrains that f(X) is linear to the left of $\psi_1$, so the coefficients of order of X greater than 1 will be zero, implies
+$\beta_2 = \beta_3 = 0$.
+
+If $X \geq \psi_k$,
+$f(X) = \sum_{j=0}^3 \beta_j X^j + \sum_{(k = 1)}^K \theta_k (X-\psi_k)_{+}^3$,
+since f(X) is linear to the right of $\psi_k$,
+$(X-\psi_k)_{+}^3 = X^3 - 3\psi_k X^2 +3 \psi_k X - \psi_K^3$, we have
+
+$$ 
+\beta_3 + \sum_{(k=1)}^K \theta_k = 0 \to \sum_{(k=1)}^K \theta_k
+\beta_2 - \sum_{(k=1)}^K 3\psi_K \theta_k = 0 \to \sum_{(k=1)}^K \psi_K \theta_k = 0
+$$
+
+## b.
+
+For $X \leq \psi_1$, $f(X) = \sum_{j=0}^3 \beta_j X^j$, since $\beta_2 = \beta_3 = 0$, $f(X) = \beta_0 +\beta_1 X$, the second and third derivatives is obvious 0.
+
+For $X \geq \psi_k$,
+$f(X) = \sum_{j=0}^3 \beta_j X^j + \sum_{(k = 1)^K} \theta_k (X-\psi_k)_{+}^3$,
+since $\beta_2 = \beta_3 = 0$, $\sum_{(k=1)}^K \theta_k$,
+$\sum_{(k=1)}^K \psi_K \theta_k = 0$. We have
+$f(X) = \beta_0 + \beta_1 X + \sum_{(k=1)}^K 3\psi_K X-\psi_k^3$. The second and third derivative of f(X) respect to X is obviously 0.
+
+# 7.
+
+## a.
+
+In the equation of $S_{\lambda}$, as discussed in the lecture, $N_j(x)$ is the basis functions for natrual cubic splines with knots at $x_1,...,x_N$, and
+$\omega_{jk} = \int N_j^{(2)}(t) N_k^{(2)}(t) \,dt$
+
+
+We could do the following computation, 
+\begin{equation}
+  \begin{aligned}
+    S_{\lambda} &= N(N^T N+\lambda \omega_N)^{-1} N^T \\ 
+                & = N(N^T N+ \lambda N^T N^{-T} \omega_N N^{-1}N)^{-1} N^T \\ 
+                & = N(N^T (I+ \lambda N^{-T} \omega_N N^{-1})N)^{-1} N^T \\ 
+                & = (I+ \lambda N^{-T} \omega_N N^{-1})^{-1} \\ 
+                 &= (I + \lambda K)^{-1}, where K = N^{-T} \omega_N N^{-1}
+  \end{aligned}
+\end{equation}
+
+## b.
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw3q7b.png")
+
+```
+
+
+

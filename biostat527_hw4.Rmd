@@ -1,0 +1,353 @@
+---
+title: "Biostat527_hw4"
+author: "Qin Li"
+date: "5/19/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+```
+
+# 1.
+## a.
+
+We generate two sets of X's, each has N=50, p = 500. The first set of x has mean of 0, and is classified as 0, and the second set of x has mean of 2, classified as 1. 
+
+```{r}
+set.seed(519)
+
+n = 50
+p = 5000
+
+x <- matrix(rnorm(n*p,0,1),nrow = n,ncol = p)
+
+y = c(rep(0,n/2),rep(1,n/2))
+
+
+```
+
+
+## b.
+```{r}
+cors <- apply(x,2,function(x) cor(y,x))
+ordered.cor <- sort(cors, index.return = T)$ix[1:100]
+library(class)
+folds <- cut(seq(1,length(y)),breaks=10,labels=FALSE)
+x.cor <- x[,ordered.cor]
+test.err <- c()
+for (i in 1:10){
+  y_pred_train <- knn(train = x.cor[folds!=i,], test = x.cor[folds==i,], cl = y[folds!=i], k = 1)
+  test.err[i] <- mean(y_pred_train != y[folds==i])
+}
+mean(test.err)
+
+```
+
+## c
+
+```{r}
+# folds <- cut(seq(1,length(y)),breaks=10,labels=FALSE)
+set.seed(833)
+folds <- sample(1:10,n,replace = T)
+test.errk <- c()
+for (i in 1:10){
+  cors <- apply(x[folds!=i,],2,function(x) cor(y[folds!=i],x))
+  ordered.cor <- sort(cors, index.return = T)$ix[1:100]
+  x.fold <- x[,ordered.cor]
+  
+  pred.k <- knn(train = x.fold[folds!=i,], test = x.fold[folds==i,], cl = y[folds!=i], k = 1)
+  test.errk[i] <- mean(pred.k != y[folds==i])
+}
+mean(test.errk)
+
+```
+
+## d.
+
+In the approach in b. to find the first 100 highly correlated predictors with y will also include data in the test set. That would reduce the bias when we try to predict the test set. Whereas this problem does not occur in the approach in c). In approach b, we get the error rate of 2%, which is way lower than the true error rate of 50%. In approach c, we have a test error of 55.1%, which is close to the true error rate. 
+
+
+# 2. 
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw4_q2a.png")
+
+```
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw4_q2b.png")
+
+```
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw4_q2c.png")
+
+```
+
+
+# 3.
+## a.
+
+```{r}
+library(FNN)
+knn.fn <- function(k){
+  n = 200
+  p = 4
+  X <- matrix(rnorm(n*p,0,1),n,p)
+  y <- rnorm(n,0,1)
+  
+  y_pred_train <- knn.reg(train = X, test = X, y = y, k = k)$pred
+  val <- y%*%y_pred_train
+  return (val)
+}
+
+
+```
+## b.
+
+```{r, out.width = "100%", fig.align = "center", echo = FALSE}
+knitr::include_graphics("hw4_q3b.png")
+
+```
+
+
+## c. 
+```{r}
+b.val <- rep(0,500)
+mean.val <- c()
+n = 200
+for (k in 1:n){
+  for (b in 1:500){
+    b.val[b] <- knn.fn(k)
+  }
+  mean.val[k] <- mean(b.val)
+}
+
+K = seq(1,n)
+plot(mean.val,n/K)
+abline(a=0,b=1,col=4) 
+legend("right",lty = seq(1,1),col = c(1,4), legend = c("500 rep","y=x"))
+```
+
+
+
+# 4.
+
+## a.
+```{r}
+library(ISLR)
+library(MASS)
+library(caret)
+data(College)
+set.seed(959)
+indx<- sample(1:dim(College)[1],dim(College)[1]/2)
+train <- College[indx,]
+test <- College[-indx,]
+
+# Stepwise regression model
+
+train.control <- trainControl(method = "cv", number = 5)
+# Train the model
+step.model <- train(Outstate ~., data = train,
+                    method = "leapForward", 
+                    trControl = train.control
+                    )
+
+coef(step.model$finalModel,unlist(step.model$bestTune))
+
+```
+
+## b.
+
+```{r}
+library(gam)
+fit <- gam(Outstate ~ Private + s(Room.Board, df = 4) + s(perc.alumni, df = 4) + s(Expend, df = 4) , data=train)
+
+par(mfrow = c(2,2))
+plot(fit, se = T, col = "blue")
+```
+
+## c
+
+It seems like the GAM model out-perform the linear regression model, when assessing by the MSE. 
+
+```{r}
+preds <- predict(fit, newdata = test)
+preds.train <- predict(fit, train)
+err.test <- mean((test$Outstate - preds)^2)
+err.train <- mean((train$Outstate - preds.train)^2)
+
+# linear preds 
+lm.mod <- lm(Outstate ~ Private + Room.Board+ perc.alumni + Expend , data=train)
+pred.lm.train <- predict(lm.mod, train)
+pred.lm.test <- predict(lm.mod, newdata = test)
+lm.err.test <- mean((test$Outstate - pred.lm.test)^2)
+lm.err.train <- mean((train$Outstate - pred.lm.train)^2)
+
+err.df <- data.frame('train MSE' = c(lm.err.train,err.train),
+                     'test MSE' = c(lm.err.test,err.test))
+rownames(err.df) <- c('linear','gam')
+err.df
+```
+
+## d.
+
+Based on the plot, I think the perc.alumni, expend and are non-linear with the response. They all show some curvature that as the value of predictor increases, the value of response goes like increase and then decrease. 
+
+
+# 5. 
+## a.
+
+```{r}
+# initialize data
+library(npreg)
+
+backfitting <- function(X,f,resids, nknots){
+  update.f <- f
+  p <- ncol(X)
+  
+  for ( j in 1:p){
+    part.resid <- resids +f[,j]
+    pred <- predict(ss(x=X[,j],y = part.resid,nknots = nknots[j]),X[,j])$y 
+    update.f[,j] <- pred - mean(pred)
+    resids <- resids + f[,j] -update.f[,j]
+  }
+  
+  return (update.f)
+}
+
+
+
+
+```
+
+## b.
+
+The MSE from my implemented is higher than the MSE from the GAM package. 
+
+```{r}
+
+# GAM
+data(College)
+
+df<- as.data.frame(College[,c("Outstate","Room.Board","perc.alumni","Expend")])
+y <- df[,1]
+alpha_h <- mean(y)
+X <- df[,-1]
+p <- ncol(X)
+n <- nrow(X)
+f <- matrix(0,n,p)
+df <- cbind(y,X)
+resids <- y - alpha_h
+
+nknots <- rep(4,3)
+
+
+new.fit <- backfitting(X,f,resids, nknots)
+
+alpha_h <- mean(y)
+fitted <- alpha_h + rowSums(new.fit)
+
+gam.func <- mean((y - fitted)^2)
+
+# use the gam package
+fit <- gam(df[,1] ~ s(Room.Board, df = 4) + s(perc.alumni, df = 4) + s(Expend, df = 4) , data=df)
+y_gam <- predict(fit, data = df)
+gam_mse <- mean((y - y_gam)^2)
+
+
+
+ResultTable <- data.frame('MSE' = c(gam_mse, gam.func))
+rownames(ResultTable) <- c('GAM package', 'GAM function')
+ResultTable
+
+```
+
+
+
+
+# 6.
+
+## a.
+
+```{r}
+library(tree)
+
+data(Carseats)
+High <- ifelse(Carseats$Sales <= 8, "NO", "YES")
+Carseats <- data.frame(Carseats, High)
+
+set.seed(1027)
+ind<- sample(1:dim(Carseats)[1],dim(Carseats)[1]/2)
+train <- Carseats[ind,]
+test <- Carseats[-ind,]
+```
+
+
+## b.
+
+The first node the ShelveLoc, depends on the value, if Bad, then we will go to the left side of the tree; of medium, then we will go to the right side of the tree. 
+The second node in the right tree is price, if the price is less than 135, then we go to the left side of the tree; if the price is greater than or equal to 135, we will go to the right side of the tree. 
+The next node on the left is US, no matther that the value is, the reuslt will be "YES" 
+The next node on the right is education, if education less than 14.5, the result is "NO"; if the education greater than 14.5, the result is "YES". 
+
+```{r}
+tree.carseats <- tree(as.factor(High)~.-Sales, train)
+summary(tree.carseats)
+plot(tree.carseats)
+text(tree.carseats, pretty = 0)
+
+```
+
+
+## c
+
+```{r}
+tree.pred <- predict(tree.carseats,test,type = "class")
+table(tree.pred, High[-ind])
+
+test.err1 <- (89+53)/(89+27+31+53)
+test.err1
+```
+
+
+## d
+
+The Misclassification error rate in the cross validation is 0.13. 
+
+```{r}
+set.seed(3)
+cv.carseats <- cv.tree(tree.carseats, FUN = prune.misclass)
+names(cv.carseats)
+par(mfrow = c(1, 2))
+plot(cv.carseats$size, cv.carseats$dev, type = "b")
+plot(cv.carseats$k, cv.carseats$dev, type = "b")
+prune.carseats <- prune.misclass(tree.carseats, best = 10)
+summary(prune.carseats)
+
+plot(prune.carseats)
+text(prune.carseats, pretty = 0)
+
+```
+
+
+## e.
+
+```{r}
+tree.pred <- predict(prune.carseats, test, type = "class")
+table(tree.pred, High[-ind])
+test.err2 <- (97+50)/(97+30+23+50)
+test.err2
+
+```
+
+
+
+
+
+
+
+
